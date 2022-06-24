@@ -59,4 +59,9 @@ public interface DispatcherService {
    */
   void withdrawByTransportOrder(TCSObjectReference<TransportOrder> ref, boolean immediateAbort)
       throws ObjectUnknownException, KernelRuntimeException;
+  
+  /**
+   * Support reroute while a vehicle arrives the destination of a step of the route.
+   */
+  void vehicleUpdatedProgressIndex();
 }

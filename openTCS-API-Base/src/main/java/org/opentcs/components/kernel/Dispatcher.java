@@ -94,4 +94,9 @@ public interface Dispatcher
    * Notifies the dispatcher of changes in the topology.
    */
   void topologyChanged();
+  
+  /**
+   * Support reroute while a vehicle arrives the destination of a step of the route.
+   */
+  void vehicleUpdatedProgressIndex();
 }

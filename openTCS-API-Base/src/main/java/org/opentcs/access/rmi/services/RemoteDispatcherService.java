@@ -48,4 +48,12 @@ public interface RemoteDispatcherService
                                 boolean immediateAbort)
       throws RemoteException;
   // CHECKSTYLE:ON
+  
+  /**
+   * Support reroute while a vehicle arrives the destination of a step of the route.
+   * @param clientId
+   * @throws RemoteException 
+   */
+  void vehicleUpdatedProgressIndex(ClientID clientId)
+      throws RemoteException;
 }

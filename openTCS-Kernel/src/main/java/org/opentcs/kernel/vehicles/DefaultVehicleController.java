@@ -1122,6 +1122,11 @@ public class DefaultVehicleController
       // Update the vehicle's progress index.
       vehicleService.updateVehicleRouteProgressIndex(vehicle.getReference(),
                                                      moveCommand.getStep().getRouteIndex());
+      
+      dispatcherService.vehicleUpdatedProgressIndex();
+      
+      //Let the scheduler know where we are now
+      scheduler.updateProgressIndex(this, moveCommand.getStep().getRouteIndex());
     }
     else if (position == null) {
       LOG.info("{}: Resetting position for vehicle", vehicle.getName());

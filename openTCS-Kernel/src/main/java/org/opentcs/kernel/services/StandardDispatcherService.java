@@ -79,4 +79,9 @@ public class StandardDispatcherService
                                immediateAbort);
     }
   }
+
+  @Override
+  public void vehicleUpdatedProgressIndex() {
+    dispatcher.vehicleUpdatedProgressIndex();
+  }
 }

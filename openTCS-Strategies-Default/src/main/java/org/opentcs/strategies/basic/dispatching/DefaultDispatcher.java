@@ -22,6 +22,7 @@ import org.opentcs.customizations.kernel.KernelExecutor;
 import org.opentcs.data.model.Vehicle;
 import org.opentcs.data.order.TransportOrder;
 import static org.opentcs.strategies.basic.dispatching.DefaultDispatcherConfiguration.RerouteTrigger.TOPOLOGY_CHANGE;
+import static org.opentcs.strategies.basic.dispatching.DefaultDispatcherConfiguration.RerouteTrigger.ROUTE_STEP_FINISHED;
 import org.opentcs.util.event.EventSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -251,4 +252,15 @@ public class DefaultDispatcher
     return true;
   }
 
+  @Override
+  public void vehicleUpdatedProgressIndex() {
+    if (configuration.rerouteTrigger() == ROUTE_STEP_FINISHED)
+    {
+      LOG.debug("Scheduling reroute task...");
+      kernelExecutor.submit(() -> {
+        LOG.debug("Rerouting vehicles due to a vehicle updated progress index...");
+        rerouteUtil.reroute(vehicleService.fetchObjects(Vehicle.class));
+      });
+    }
+  }
 }

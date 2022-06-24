@@ -91,12 +91,19 @@ public class ShortestPathPointRouter
       return 0;
     }
 
-    GraphPath<String, Edge> graphPath = algo.getPath(srcPointRef.getName(),
-                                                          destPointRef.getName());
-    if (graphPath == null) {
+    GraphPath<String, Edge> graphPath = null;
+    try
+    {
+      graphPath = algo.getPath(srcPointRef.getName(), destPointRef.getName());
+      if (graphPath == null) {
+        return INFINITE_COSTS;
+      }
+    }
+    catch (IllegalArgumentException e)
+    {
+      System.out.println(e.getMessage());
       return INFINITE_COSTS;
     }
-
     return (long) graphPath.getWeight();
   }
 

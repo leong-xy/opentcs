@@ -34,6 +34,7 @@ import org.opentcs.data.order.TransportOrder;
 import static org.opentcs.strategies.basic.routing.PointRouter.INFINITE_COSTS;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Collection;
 
 /**
  * A basic {@link Router} implementation.
@@ -169,11 +170,11 @@ public class DefaultRouter
     requireNonNull(vehicle, "vehicle");
     requireNonNull(sourcePoint, "sourcePoint");
     requireNonNull(transportOrder, "transportOrder");
-
+    PointRouter pointRouter = getActualPointRouter(sourcePoint, vehicle);
     synchronized (this) {
       List<DriveOrder> driveOrderList = transportOrder.getFutureDriveOrders();
       DriveOrder[] driveOrders = driveOrderList.toArray(new DriveOrder[driveOrderList.size()]);
-      PointRouter pointRouter = getPointRouterForVehicle(vehicle);
+//      PointRouter pointRouter = getPointRouterForVehicle(vehicle);
       OrderRouteParameterStruct params = new OrderRouteParameterStruct(driveOrders, pointRouter);
       OrderRouteResultStruct resultStruct = new OrderRouteResultStruct(driveOrderList.size());
       computeCheapestOrderRoute(sourcePoint, params, 0, resultStruct);
@@ -192,7 +193,8 @@ public class DefaultRouter
     requireNonNull(destinationPoint, "destinationPoint");
 
     synchronized (this) {
-      PointRouter pointRouter = getPointRouterForVehicle(vehicle);
+//      PointRouter pointRouter = getPointRouterForVehicle(vehicle);
+      PointRouter pointRouter = getActualPointRouter(sourcePoint, vehicle);
       long costs = pointRouter.getCosts(sourcePoint, destinationPoint);
       if (costs == INFINITE_COSTS) {
         return Optional.empty();
@@ -478,6 +480,141 @@ public class DefaultRouter
       }
     }
     return result;
+  }
+
+  private Collection<Point> getUnusablePoints(Point sourcePoint, Vehicle vehicle) {
+    Collection<Point> unusablePoints = new HashSet<>();
+    Set<Vehicle> allVehicles = objectService.fetchObjects(Vehicle.class);
+    Set<Vehicle> occupyUnusablePointsVehicles1 = new HashSet<>();
+    Set<Vehicle> occupyUnusablePointsVehicles2 = new HashSet<>();
+    
+    for (Vehicle ve : allVehicles)
+    {
+      if (ve.getName().equals(vehicle.getName()))
+      {
+        continue;
+      }
+      if (ve.getCurrentPosition() == null)
+      {
+        continue;
+      }
+      if (ve.hasState(Vehicle.State.IDLE))
+      {
+        occupyUnusablePointsVehicles1.add(ve);
+        continue;
+      }
+      if (ve.hasProcState(Vehicle.ProcState.PROCESSING_ORDER))
+      {
+        boolean willAdd = true;
+        for (TransportOrder to : objectService.fetchObjects(TransportOrder.class))
+        {
+          TCSObjectReference<Vehicle> toIntendedVehicle = to.getIntendedVehicle() == null ? null
+              : to.getIntendedVehicle();
+          String toIntendedVehicleName = (toIntendedVehicle == null
+                                          || toIntendedVehicle.getName() == null ) ? "toIntendedVehicle_null"
+              : toIntendedVehicle.getName();
+          if ((to.hasState(TransportOrder.State.ACTIVE) || to.hasState(TransportOrder.State.DISPATCHABLE))
+              && toIntendedVehicleName.equals(ve.getName())) {
+            willAdd = false;
+            break;
+          }
+        }
+        if (willAdd)
+        {
+          occupyUnusablePointsVehicles2.add(ve);
+        }
+      }
+    }
+    for (Vehicle ve : occupyUnusablePointsVehicles1)
+    {
+      for (Point curPoint : objectService.fetchObjects(Point.class))
+      {
+        if (curPoint.getName().equals(ve.getCurrentPosition().getName())
+            && !sourcePoint.getName().equals(ve.getCurrentPosition().getName()))
+        {
+          unusablePoints.add(curPoint);
+          break;
+        }
+      }
+    }
+    
+    for (Vehicle ve : occupyUnusablePointsVehicles2)
+    {
+      TransportOrder to = objectService.fetchObject(TransportOrder.class, ve.getTransportOrder().getName());
+      List<DriveOrder> dos = to.getAllDriveOrders();
+      Route route_dp = dos.get(dos.size() - 1).getRoute();
+      Point destinationPoint = route_dp == null ? null : route_dp.getFinalDestinationPoint();
+      String vehiclePositionName = vehicle.getCurrentPosition().getName();
+      boolean foundPN = false;
+      boolean will_skip = false;
+      
+      Set<String> namesOfPointToTravel = new HashSet<>();
+      String positionName = ve.getCurrentPosition().getName();
+      Route route_0 = dos.get(0).getRoute();
+      List<Route.Step> routeSteps = route_0 == null ? new ArrayList<>()
+          : route_0.getSteps();
+      Point firstStepSPoint = route_0 == null ? null
+          : routeSteps.get(0).getSourcePoint();
+      String firstStepSPointName = firstStepSPoint == null ? "firstStepSPoint_null"
+          : firstStepSPoint.getName();
+      
+      if (positionName.equals(firstStepSPointName)) {
+        foundPN = true;
+      }
+      for (DriveOrder do_ : dos)
+      {
+        Route route_ = do_.getRoute();
+        List<Route.Step> steps = route_ == null ? new ArrayList<>() : route_.getSteps();
+        for (Route.Step step : steps)
+        {
+          String pointName = step.getDestinationPoint().getName();
+          if (!foundPN && positionName.equals(pointName))
+          {
+            foundPN = true;
+            continue;
+          }
+          if (foundPN)
+          {
+            namesOfPointToTravel.add(pointName);
+          }
+        }
+      }
+      for (String name : namesOfPointToTravel)
+      {
+        if (vehiclePositionName.equals(name))
+        {
+          will_skip = true;
+          break;
+        }
+      }
+      if (will_skip)
+        continue;
+      
+      for (Point curPoint : objectService.fetchObjects(Point.class))
+      {
+        String dpName = destinationPoint == null ? "destinationPointName_null"
+            : destinationPoint.getName();
+        if (curPoint.getName().equals(dpName)
+            && !sourcePoint.getName().equals(ve.getCurrentPosition().getName()))
+        {
+          unusablePoints.add(curPoint);
+          break;
+        }
+      }
+    }
+    if (unusablePoints.contains(sourcePoint))
+    {
+      unusablePoints.remove(sourcePoint);
+    }
+    
+    return unusablePoints;
+  }
+  
+  private PointRouter getActualPointRouter(
+      Point sourcePoint,
+      Vehicle vehicle) {
+    Collection<Point> unusablePoints = getUnusablePoints(sourcePoint, vehicle);
+    return pointRouterFactory.createPointRouter(vehicle, unusablePoints);
   }
 
   /**
